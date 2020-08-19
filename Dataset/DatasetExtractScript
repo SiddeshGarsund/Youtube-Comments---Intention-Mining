@@ -1,0 +1,66 @@
+/*** Wonder Woman ***/
+
+var vid = 'sfM7_JLk-84'                          // YouTube video ID 
+var limit = 100;                                 // Number of YouTube comments to scrape
+
+// Retrieves comments which contain these terms
+// These terms dont't necessarily have to be an exact match
+var intentionTerms = 'watch|see|download'                  
+
+// Initialisation of variables
+var spreadsheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+var firstPage = true;  
+var lastPage = false;
+var commentList;
+var nextPageToken;
+var rowOffset = 0;
+
+function retrieveComments(){
+ 
+  // Include columns headings
+  spreadsheet.getRange("A1").setValue('Username').setFontWeight("bold");
+  spreadsheet.getRange("B1").setValue('Comment').setFontWeight("bold");
+  spreadsheet.getRange("C1").setValue('Likes').setFontWeight("bold");
+  spreadsheet.getRange("D1").setValue('Date').setFontWeight("bold");
+  spreadsheet.getRange("E1").setValue('Reply Count').setFontWeight("bold");
+  spreadsheet.getRange("F1").setValue('Replies').setFontWeight("bold");
+ 
+  while (limit > 0 && lastPage == false){
+   
+    if (firstPage == true){
+      commentList = YouTube.CommentThreads.list('snippet', {videoId: vid, maxResults: 100, textFormat: 'plainText', searchTerms: intentionTerms})
+      firstPage = false;
+      nextPageToken = commentList.nextPageToken;
+    }
+    // For all other pages, the YouTube.CommentThreads.list() function gets a pageToken parameter
+    else {
+      commentList = YouTube.CommentThreads.list('snippet', {videoId: vid, maxResults: 100, pageToken: nextPageToken, textFormat: 'plainText', searchTerms: intentionTerms})
+      nextPageToken = commentList.nextPageToken;
+    }
+   
+    // For loop to populate the Google Sheet with retrieved YouTube comments
+    for (var row=0; row<commentList.items.length; row++) {
+      var commentItem  = commentList.items[row];
+      var commentId = commentItem.snippet.topLevelComment.id;
+      
+      var replyData = [];
+	  var replyList = YouTube.Comments.list('snippet', {parentId: commentId, textFormat: 'plainText'})
+      var numberOfReplies = replyList.items.length;
+       
+      for (var r=0; r<numberOfReplies; r++) {
+        var replyItem = replyList.items[r];
+        replyData.push(replyItem.snippet.textDisplay);        
+      }
+      var commentData  = [commentItem.snippet.topLevelComment.snippet.authorDisplayName, commentItem.snippet.topLevelComment.snippet.textDisplay, commentItem.snippet.topLevelComment.snippet.likeCount, commentItem.snippet.topLevelComment.snippet.publishedAt, numberOfReplies, replyData.join('\n- - - - -\n')];
+      spreadsheet.getRange(row+rowOffset+2, 1, 1, 6).setValues([commentData]); 
+    }
+   
+    if(commentList.items.length != 100){
+      lastPage = true;                     // If number of comments retrieved < 100, this indicates the last page
+    }
+    else {
+      rowOffset = rowOffset + 100;         // Row offset is incremeneted by 100
+      limit = limit - 100;                 // Limit is decremented by 100
+    }  
+  }
+}
